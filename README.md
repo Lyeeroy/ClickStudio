@@ -2,6 +2,8 @@
 
 A Windows desktop app for recording and replaying mouse clicks, keyboard input, commands and window actions - built for automating repetitive stuff in games and apps.
 
+![Click Studio screenshot](https://github.com/Lyeeroy/ClickStudio/blob/main/image.png?raw=true)
+
 ## TL;DR
 
 Add a few steps (click here, press that, wait, run a command, focus a window), hit **Run**, and Click Studio replays them for you. Export your sequence as JSON or as a standalone `.py` script that runs without the app.
