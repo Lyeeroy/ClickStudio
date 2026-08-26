@@ -34,6 +34,7 @@ class MouseStep:
     clicks: int = 1
     hold: int = 60
     delay: int = 0
+    human: bool = False
 
 
 @dataclass
@@ -47,6 +48,8 @@ class KeyStep:
 @dataclass
 class SleepStep:
     duration: int = 1000
+    duration_max: int = 1000
+    random: bool = False
     delay: int = 0
 
 
@@ -81,9 +84,10 @@ def step_from_dict(d: dict):
                 x=int(d.get("x", 0)),
                 y=int(d.get("y", 0)),
                 button=btn if btn in ("left", "right", "middle") else "left",
-                clicks=max(1, int(d.get("clicks", 1))),
+                clicks=max(0, int(d.get("clicks", 1))),
                 hold=max(0, int(d.get("hold", 60))),
                 delay=max(0, int(d.get("delay", 0))),
+                human=bool(d.get("human", False)),
             )
         if t == "key":
             key = str(d.get("key", "")).strip()
@@ -98,6 +102,8 @@ def step_from_dict(d: dict):
         if t == "sleep":
             return SleepStep(
                 duration=max(0, int(d.get("duration", 1000))),
+                duration_max=max(0, int(d.get("duration_max", d.get("duration", 1000)))),
+                random=bool(d.get("random", False)),
                 delay=max(0, int(d.get("delay", 0))),
             )
         if t == "cmd":
@@ -139,7 +145,9 @@ def step_action_text(s) -> str:
     if isinstance(s, MouseStep):
         b = s.button[0].lower()
         bname = "Left" if b == "l" else ("Right" if b == "r" else "Middle")
-        return f"{bname} x{s.clicks} @ ({s.x},{s.y}) hold {s.hold}ms"
+        if s.clicks == 0:
+            return f"Move to ({s.x},{s.y})" + (" human" if s.human else "")
+        return f"{bname} x{s.clicks} @ ({s.x},{s.y}) hold {s.hold}ms" + (" human" if s.human else "")
     if isinstance(s, KeyStep):
         if s.count <= 1:
             return f"'{s.key}'"
@@ -150,6 +158,10 @@ def step_action_text(s) -> str:
     if isinstance(s, WindowStep):
         title = s.title if len(s.title) <= 28 else s.title[:27] + "…"
         return f"{s.action} '{title}'"
+    if isinstance(s, SleepStep):
+        if s.random:
+            return f"{s.duration}-{s.duration_max}ms random"
+        return f"{s.duration}ms"
     return f"{s.duration}ms"
 
 

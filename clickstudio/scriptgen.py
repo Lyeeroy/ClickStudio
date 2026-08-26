@@ -10,6 +10,7 @@ Move the mouse into any screen corner to abort (pyautogui failsafe).
 import ctypes
 import ctypes.wintypes
 import os
+import random
 import re
 import subprocess
 import time
@@ -82,6 +83,66 @@ def _send(spec):
             pyautogui.press(key, _pause=False)
 
 
+def human_move_to(tx, ty, step_sleep=0.004):
+    import math
+    import random
+    cur = pyautogui.position()
+    sx, sy = cur.x, cur.y
+    dx, dy = tx - sx, ty - sy
+    dist = math.hypot(dx, dy)
+    if dist < 2:
+        if dist >= 1:
+            pyautogui.moveTo(tx, ty, duration=0.0, _pause=False)
+        return
+    nx, ny = -dy / dist, dx / dist
+    curve = dist * random.uniform(0.15, 0.5) * random.choice((-1, 1))
+    c1x = sx + dx * random.uniform(0.25, 0.4) + nx * curve * random.uniform(0.4, 1.0)
+    c1y = sy + dy * random.uniform(0.25, 0.4) + ny * curve * random.uniform(0.4, 1.0)
+    c2x = sx + dx * random.uniform(0.6, 0.75) + nx * curve * random.uniform(0.4, 1.0)
+    c2y = sy + dy * random.uniform(0.6, 0.75) + ny * curve * random.uniform(0.4, 1.0)
+
+    def bez(t):
+        u = 1.0 - t
+        bx = u * u * u * sx + 3 * u * u * t * c1x + 3 * u * t * t * c2x + t * t * t * tx
+        by = u * u * u * sy + 3 * u * u * t * c1y + 3 * u * t * t * c2y + t * t * t * ty
+        return bx, by
+
+    t = 0.0
+    prevx, prevy = sx, sy
+    while t < 1.0:
+        speed = 0.2 + 4.0 * t * (1.0 - t)
+        t += random.uniform(0.008, 0.03) * speed
+        if t > 1.0:
+            t = 1.0
+        bx, by = bez(t)
+        j = max(0.0, 1.0 - t * 1.2) * random.uniform(0.0, 3.0)
+        ang = random.uniform(0.0, math.tau)
+        px = bx + math.cos(ang) * j
+        py = by + math.sin(ang) * j
+        pyautogui.moveTo(px, py, duration=0.0, _pause=False)
+        if random.random() < 0.04:
+            time.sleep(random.uniform(0.02, 0.09))
+        else:
+            time.sleep(step_sleep)
+        prevx, prevy = px, py
+    if dist > 60 and random.random() < 0.6:
+        vx, vy = tx - prevx, ty - prevy
+        mlen = math.hypot(vx, vy) or 1.0
+        ov = dist * random.uniform(0.02, 0.06)
+        ox = tx + vx / mlen * ov * random.choice((-1, 1))
+        oy = ty + vy / mlen * ov * random.choice((-1, 1))
+        for k in range(1, 5):
+            pyautogui.moveTo(tx + (ox - tx) * (k / 5.0), ty + (oy - ty) * (k / 5.0),
+                             duration=0.0, _pause=False)
+            time.sleep(step_sleep)
+        for k in range(1, 5):
+            pyautogui.moveTo(ox + (tx - ox) * (k / 5.0), oy + (ty - oy) * (k / 5.0),
+                             duration=0.0, _pause=False)
+            time.sleep(step_sleep)
+    else:
+        pyautogui.moveTo(tx, ty, duration=0.0, _pause=False)
+
+
 def _window_action(hwnd, action):
     WM_CLOSE = 16
     if action == "close":
@@ -134,9 +195,13 @@ def _play(steps):
         time.sleep(max(0, int(s.get("delay", 0))) / 1000.0)
         kind = s.get("type")
         if kind == "mouse":
-            clicks = max(1, int(s.get("clicks", 1)))
+            clicks = max(0, int(s.get("clicks", 1)))
             btn = s.get("button", "left")
-            pyautogui.moveTo(int(s.get("x", 0)), int(s.get("y", 0)), duration=0.05, _pause=False)
+            tx, ty = int(s.get("x", 0)), int(s.get("y", 0))
+            if s.get("human"):
+                human_move_to(tx, ty)
+            else:
+                pyautogui.moveTo(tx, ty, duration=0.05, _pause=False)
             for c in range(clicks):
                 pyautogui.mouseDown(button=btn, _pause=False)
                 time.sleep(max(0, int(s.get("hold", 60))) / 1000.0)
@@ -151,7 +216,11 @@ def _play(steps):
                 if c < cnt - 1:
                     time.sleep(ivl / 1000.0)
         elif kind == "sleep":
-            time.sleep(max(0, int(s.get("duration", 0))) / 1000.0)
+            sd = max(0, int(s.get("duration", 0)))
+            if s.get("random"):
+                smax = max(0, int(s.get("duration_max", sd)))
+                sd = random.randint(min(sd, smax), max(sd, smax))
+            time.sleep(sd / 1000.0)
         elif kind == "cmd":
             subprocess.run(str(s.get("command", "")), shell=True)
         elif kind == "window":

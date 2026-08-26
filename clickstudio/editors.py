@@ -353,11 +353,21 @@ class MouseEditor(_StepEditorCard):
 
         auto_row = QHBoxLayout()
         self.sw_auto = SwitchButton("Auto-add")
+        self.sw_auto.setOnText("Auto-add")
+        self.sw_auto.setOffText("Auto-add")
         self.sw_auto.checkedChanged.connect(self._set_auto)
         auto_row.addWidget(self.sw_auto)
         auto_row.addStretch(1)
         v.addLayout(auto_row)
         self._auto = False
+
+        human_row = QHBoxLayout()
+        self.sw_human = SwitchButton("Simulate human movement")
+        self.sw_human.setOnText("Simulate human movement")
+        self.sw_human.setOffText("Simulate human movement")
+        human_row.addWidget(self.sw_human)
+        human_row.addStretch(1)
+        v.addLayout(human_row)
 
         self.in_x = _spin(-100000, 100000)
         self.in_y = _spin(-100000, 100000)
@@ -372,7 +382,7 @@ class MouseEditor(_StepEditorCard):
 
         self.cb_btn = ComboBox()
         self.cb_btn.addItems(["left", "right", "middle"])
-        self.clk = _spin(1, 99)
+        self.clk = _spin(0, 99)
         self.in_hold = _spin(0, 60000)
         self.in_delay = _spin(0, 600000)
 
@@ -407,9 +417,10 @@ class MouseEditor(_StepEditorCard):
         self.in_x.setValue(s.x)
         self.in_y.setValue(s.y)
         self.cb_btn.setCurrentText(s.button if s.button in ("left", "right", "middle") else "left")
-        self.clk.setValue(max(1, s.clicks))
+        self.clk.setValue(max(0, s.clicks))
         self.in_hold.setValue(max(0, s.hold))
         self.in_delay.setValue(max(0, s.delay))
+        self.sw_human.setChecked(bool(s.human))
         _set_row_visible(self.row_hold, self.clk.value() > 1)
 
     def close_editor(self) -> None:
@@ -434,6 +445,7 @@ class MouseEditor(_StepEditorCard):
         self.step.clicks = self.clk.value()
         self.step.hold = self.in_hold.value()
         self.step.delay = self.in_delay.value()
+        self.step.human = self.sw_human.isChecked()
         self.committed.emit()
 
     def showEvent(self, e) -> None:
@@ -463,6 +475,7 @@ class MouseEditor(_StepEditorCard):
                 clicks=self.clk.value(),
                 hold=self.in_hold.value(),
                 delay=self.in_delay.value(),
+                human=self.sw_human.isChecked(),
             )
             self.lbl_live.setText(f"auto-added  X {x}  Y {y}")
             self.step_captured.emit(step)
@@ -647,13 +660,40 @@ class SleepEditor(_StepEditorCard):
         v.addWidget(SubtitleLabel("Sleep Step"))
 
         self.in_dur = _spin(0, 3600000)
+        self.in_dur_min = _spin(0, 3600000)
+        self.in_dur_max = _spin(0, 3600000)
         self.in_delay = _spin(0, 600000)
 
-        v.addLayout(_field_row("Duration (ms):", self.in_dur))
+        rand_row = QHBoxLayout()
+        self.sw_rand = SwitchButton("Random duration")
+        self.sw_rand.setOnText("Random duration")
+        self.sw_rand.setOffText("Random duration")
+        self.sw_rand.checkedChanged.connect(self._on_rand)
+        rand_row.addWidget(self.sw_rand)
+        rand_row.addStretch(1)
+        v.addLayout(rand_row)
+
+        self.row_dur = _field_row("Duration (ms):", self.in_dur)
+        self.row_dmin = _field_row("Min (ms):", self.in_dur_min)
+        self.row_dmax = _field_row("Max (ms):", self.in_dur_max)
+        v.addLayout(self.row_dur)
+        v.addLayout(self.row_dmin)
+        v.addLayout(self.row_dmax)
+        _set_row_visible(self.row_dmin, False)
+        _set_row_visible(self.row_dmax, False)
         v.addLayout(_field_row("Delay (ms):", self.in_delay))
         v.addWidget(_tip("pauses the sequence before continuing"))
         v.addLayout(_button_row("Add", self.commit, self.cancelled.emit))
         self.hide()
+
+    def _on_rand(self, on: bool) -> None:
+        _set_row_visible(self.row_dur, not on)
+        _set_row_visible(self.row_dmin, on)
+        _set_row_visible(self.row_dmax, on)
+        if on:
+            self.in_dur_min.setValue(self.in_dur.value())
+            if self.in_dur_max.value() < self.in_dur_min.value():
+                self.in_dur_max.setValue(self.in_dur_min.value())
 
     def open_for(self, step, ok_text: str = "Add") -> None:
         self.step = step
@@ -661,7 +701,11 @@ class SleepEditor(_StepEditorCard):
             b.setText(ok_text)
             break
         self.in_dur.setValue(max(0, step.duration))
+        self.in_dur_min.setValue(max(0, step.duration))
+        self.in_dur_max.setValue(max(0, step.duration_max))
         self.in_delay.setValue(max(0, step.delay))
+        self.sw_rand.setChecked(bool(step.random))
+        self._on_rand(self.sw_rand.isChecked())
         self.setVisible(True)
 
     def close_editor(self) -> None:
@@ -675,6 +719,8 @@ class SleepEditor(_StepEditorCard):
         if self.step is None:
             return
         self.step.duration = self.in_dur.value()
+        self.step.duration_max = self.in_dur_max.value()
+        self.step.random = self.sw_rand.isChecked()
         self.step.delay = self.in_delay.value()
         self.committed.emit()
 
