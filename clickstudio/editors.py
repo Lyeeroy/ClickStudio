@@ -453,7 +453,9 @@ class MouseEditor(_StepEditorCard):
         self.session.start()
 
     def hideEvent(self, e) -> None:
-        self.session.stop()
+        # Keep the capture hook alive while the editor is merely hidden
+        # (e.g. the main window is minimized). The session is only torn
+        # down explicitly in close_editor().
         super().hideEvent(e)
 
     def _set_auto(self, on: bool) -> None:
