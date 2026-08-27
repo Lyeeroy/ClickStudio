@@ -30,10 +30,10 @@ def load_settings() -> AppSettings:
     sec = cp["settings"]
     cap = sec.get("CaptureHK", "F9").strip()
     play = sec.get("PlayHK", "F10").strip()
-    if cap.upper() in CAP_CHOICES:
-        s.cap_hk = cap.upper()
-    if play.lower() in PLAY_CHOICES:
-        s.play_hk = play if play.lower() == "pause" else play.upper()
+    if cap:
+        s.cap_hk = cap
+    if play:
+        s.play_hk = play if play.lower() == "pause" else play
     s.loop_inf = sec.get("LoopInfinite", "0") == "1"
     try:
         s.loop_count = max(1, int(sec.get("LoopCount", "1")))

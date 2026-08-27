@@ -9,6 +9,8 @@ from PyQt6.QtWidgets import (
     QHBoxLayout,
     QHeaderView,
     QPlainTextEdit,
+    QSplitter,
+    QSplitterHandle,
     QStackedLayout,
     QTableWidgetItem,
     QVBoxLayout,
@@ -32,6 +34,47 @@ from qfluentwidgets import (
 
 from .editors import CmdEditor, KeyEditor, MouseEditor, SleepEditor, WindowEditor
 from .models import step_action_text, step_type_name
+
+
+class _SplitterHandle(QSplitterHandle):
+    def __init__(self, orientation, parent):
+        super().__init__(orientation, parent)
+        self._hover = False
+        self.setCursor(Qt.CursorShape.SplitHCursor)
+        self.setMouseTracking(True)
+
+    def enterEvent(self, event):
+        self._hover = True
+        self.update()
+        super().enterEvent(event)
+
+    def leaveEvent(self, event):
+        self._hover = False
+        self.update()
+        super().leaveEvent(event)
+
+    def paintEvent(self, event):
+        if not self._hover:
+            return
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        w, h = self.width(), self.height()
+        pen = QPen(themeColor())
+        pen.setWidth(2)
+        painter.setPen(pen)
+        x = w // 2
+        painter.drawLine(x, 10, x, h - 10)
+
+
+class _HSplitter(QSplitter):
+    def __init__(self, parent=None):
+        super().__init__(Qt.Orientation.Horizontal, parent)
+        self.setHandleWidth(8)
+        self.setChildrenCollapsible(False)
+        self.setContentsMargins(0, 0, 0, 0)
+
+    def createHandle(self):
+        return _SplitterHandle(Qt.Orientation.Horizontal, self)
 
 
 class AddButtonSlot(QWidget):
@@ -470,11 +513,15 @@ class HomeInterface(QWidget):
         scroll.viewport().setStyleSheet("background: transparent;")
         scroll.setMinimumWidth(258)
 
-        top = QHBoxLayout()
-        top.setSpacing(16)
-        top.addWidget(self.table, 1)
-        top.addWidget(scroll, 0)
-        root.addLayout(top)
+        top = _HSplitter(self)
+        top.addWidget(self.table)
+        top.addWidget(scroll)
+        top.setStretchFactor(0, 1)
+        top.setStretchFactor(1, 0)
+        top.setCollapsible(0, False)
+        top.setCollapsible(1, False)
+        self.table.setMinimumWidth(360)
+        root.addWidget(top)
         root.addWidget(self.console)
 
         self.btn_add_mouse.clicked.connect(self.add_mouse_clicked.emit)

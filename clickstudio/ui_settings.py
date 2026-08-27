@@ -1,17 +1,94 @@
+import keyboard
 from PyQt6.QtCore import pyqtSignal
-from PyQt6.QtWidgets import QGridLayout, QVBoxLayout, QWidget
+from PyQt6.QtWidgets import QGridLayout, QHBoxLayout, QVBoxLayout, QWidget
 from qfluentwidgets import (
     BodyLabel,
     CardWidget,
-    ComboBox,
     FluentIcon as FIF,
+    LineEdit,
     PrimaryPushButton,
     RadioButton,
     SpinBox,
     TitleLabel,
+    ToolButton,
 )
 
-from .settings import CAP_CHOICES, PLAY_CHOICES, AppSettings
+from .editors import _REC_MODS, _rec_key_name, _rec_token_spec
+from .settings import AppSettings
+
+
+class _HotkeyField(QWidget):
+    def __init__(self, initial: str, parent=None):
+        super().__init__(parent)
+        lay = QHBoxLayout(self)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(8)
+        self.inp = LineEdit()
+        self.inp.setText(initial)
+        self.inp.setMinimumWidth(120)
+        lay.addWidget(self.inp, 1)
+        self.btn = ToolButton()
+        self.btn.setText("REC")
+        self.btn.setFixedWidth(58)
+        self.btn.setToolTip("Press REC, then the hotkey (ESC cancels)")
+        self.btn.clicked.connect(self._toggle)
+        lay.addWidget(self.btn)
+        self._hook = None
+        self._mods = set()
+        self._held = set()
+
+    def value(self) -> str:
+        return self.inp.text().strip()
+
+    def _toggle(self) -> None:
+        if self._hook is None:
+            self._start()
+        else:
+            self._stop(False)
+
+    def _start(self) -> None:
+        if self._hook is not None:
+            return
+        self._mods.clear()
+        self._held.clear()
+
+        def on_event(e):
+            name = _rec_key_name(e.name)
+            if not name:
+                return
+            if e.event_type == "down":
+                self._held.add(name)
+                if name == "esc":
+                    self._stop(False)
+                    return
+                if name in _REC_MODS:
+                    self._mods.add(name)
+                else:
+                    self._stop(True, _rec_token_spec(self._mods, name))
+            else:
+                self._held.discard(name)
+                self._mods.discard(name)
+
+        try:
+            self._hook = keyboard.hook(on_event)
+        except Exception:
+            return
+        self.btn.setText("...")
+        self.btn.setToolTip("Recording - press a key (ESC cancels)")
+
+    def _stop(self, commit: bool, spec: str = "") -> None:
+        if self._hook is None:
+            return
+        h = self._hook
+        self._hook = None
+        try:
+            keyboard.unhook(h)
+        except Exception:
+            pass
+        self.btn.setText("REC")
+        self.btn.setToolTip("Press REC, then the hotkey (ESC cancels)")
+        if commit and spec:
+            self.inp.setText(spec)
 
 
 class SettingsInterface(QWidget):
@@ -31,17 +108,12 @@ class SettingsInterface(QWidget):
         g.setHorizontalSpacing(18)
 
         g.addWidget(BodyLabel("Capture coords hotkey:"), 0, 0)
-        self.cb_cap = ComboBox()
-        self.cb_cap.addItems(CAP_CHOICES)
-        self.cb_cap.setCurrentText(current.cap_hk)
-        g.addWidget(self.cb_cap, 0, 1)
+        self.cap_field = _HotkeyField(current.cap_hk)
+        g.addWidget(self.cap_field, 0, 1)
 
         g.addWidget(BodyLabel("Play/Pause hotkey:"), 1, 0)
-        self.cb_play = ComboBox()
-        self.cb_play.addItems([p if p == "pause" else p.upper() for p in PLAY_CHOICES])
-        cur = current.play_hk
-        self.cb_play.setCurrentText(cur if cur == "pause" else cur.upper())
-        g.addWidget(self.cb_play, 1, 1)
+        self.play_field = _HotkeyField(current.play_hk)
+        g.addWidget(self.play_field, 1, 1)
 
         g.addWidget(BodyLabel("Stop is always ESC."), 2, 0, 1, 2)
 
@@ -66,8 +138,8 @@ class SettingsInterface(QWidget):
 
     def _emit_saved(self) -> None:
         s = AppSettings(
-            cap_hk=self.cb_cap.currentText(),
-            play_hk=self.cb_play.currentText(),
+            cap_hk=self.cap_field.value(),
+            play_hk=self.play_field.value(),
             loop_inf=self.rb_inf.isChecked(),
             loop_count=self.in_loop.value(),
         )
